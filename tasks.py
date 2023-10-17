@@ -5,6 +5,7 @@ from RPA.HTTP import HTTP
 from RPA.Tables import Tables
 from RPA.PDF import PDF
 from RPA.Archive import Archive
+from RPA.FileSystem import FileSystem
 
 @task
 def order_robots_from_RobotSpareBin():
@@ -15,11 +16,6 @@ def order_robots_from_RobotSpareBin():
     Embeds the screenshot of the robot to the PDF receipt.
     Creates ZIP archive of the receipts and the images.
     """
-
-    browser.configure(
-        browser_engine="msedge",
-        headless=False,
-    )
 
     open_robot_order_website()
     download_csv_file()
@@ -64,7 +60,8 @@ def fill_the_form(order):
     page.fill("#address", str(order["Address"]))
     page.click("button:text('Preview')")
 
-    page.click("button:text('Order')")
+    while(page.query_selector("#receipt") is None):
+        page.click("button:text('Order')")
 
 
 def store_receipt_as_pdf(order_number):
@@ -73,23 +70,20 @@ def store_receipt_as_pdf(order_number):
     page = browser.page()
 
     pdf = PDF()
+    lib = FileSystem()
+    lib.create_directory("output/receipts")
     pdf_path = "output/receipts/order_"+order_number+".pdf"
 
-    try:
 
-        order_receipt_html = page.locator("#receipt").inner_html()
-    
-        pdf.html_to_pdf(order_receipt_html, pdf_path)
+    page.locator("#receipt").wait_for(state='attached')
 
-    except:
+    order_receipt_html = page.locator("#receipt").inner_html(timeout=10)
 
-        page.click("button:text('Order')",click_count=3)
-        
-        order_receipt_html = page.locator("#receipt").inner_html()
-    
-        pdf.html_to_pdf(order_receipt_html, pdf_path)
+    pdf.html_to_pdf(order_receipt_html, pdf_path)
+
     
     screenshot_robot(order_number)
+
     embed_screenshot_to_receipt("output/receipts/"+order_number+".png", pdf_path)
 
     page.click("button:text('Order another robot')")
@@ -98,7 +92,7 @@ def store_receipt_as_pdf(order_number):
 def screenshot_robot(order_number):
     """Take a screenshot of the page"""
     page = browser.page()
-    page.screenshot(path="output/receipts/"+order_number+".png")
+    page.locator(selector="#robot-preview-image").screenshot(path="output/receipts/"+order_number+".png")
 
 def embed_screenshot_to_receipt(screenshot, pdf_file):
     """Embed the robot screenshot to the receipt PDF file"""
