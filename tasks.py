@@ -4,6 +4,7 @@ from robocorp import browser
 from RPA.HTTP import HTTP
 from RPA.Tables import Tables
 from RPA.PDF import PDF
+from RPA.Archive import Archive
 
 @task
 def order_robots_from_RobotSpareBin():
@@ -15,9 +16,10 @@ def order_robots_from_RobotSpareBin():
     Creates ZIP archive of the receipts and the images.
     """
 
-    # browser.configure(
-    #     slowmo=10,
-    # )
+    browser.configure(
+        browser_engine="msedge",
+        headless=False,
+    )
 
     open_robot_order_website()
     download_csv_file()
@@ -28,6 +30,7 @@ def order_robots_from_RobotSpareBin():
         fill_the_form(row)
         store_receipt_as_pdf(str(row["Order number"]))
 
+    archive_receipts()
 
 
 def open_robot_order_website():
@@ -60,22 +63,34 @@ def fill_the_form(order):
     page.fill("input[id='"+ leg_id +"']", str(order["Legs"]))
     page.fill("#address", str(order["Address"]))
     page.click("button:text('Preview')")
+
     page.click("button:text('Order')")
+
 
 def store_receipt_as_pdf(order_number):
     """Store the order receipt as a PDF file"""
 
     page = browser.page()
 
-    while(page.wait_for_selector("#receipt") == None):
-        page.click("button:text('Order')")
-
-    order_receipt_html = page.locator("#receipt").inner_html()
     pdf = PDF()
-    pdf.html_to_pdf(order_receipt_html, "output/receipts/"+order_number+".pdf")
+    pdf_path = "output/receipts/order_"+order_number+".pdf"
 
+    try:
+
+        order_receipt_html = page.locator("#receipt").inner_html()
+    
+        pdf.html_to_pdf(order_receipt_html, pdf_path)
+
+    except:
+
+        page.click("button:text('Order')",click_count=3)
+        
+        order_receipt_html = page.locator("#receipt").inner_html()
+    
+        pdf.html_to_pdf(order_receipt_html, pdf_path)
+    
     screenshot_robot(order_number)
-    embed_screenshot_to_receipt("output/receipts/"+order_number+".png", "output/receipts/"+order_number+".pdf")
+    embed_screenshot_to_receipt("output/receipts/"+order_number+".png", pdf_path)
 
     page.click("button:text('Order another robot')")
       
@@ -97,3 +112,7 @@ def embed_screenshot_to_receipt(screenshot, pdf_file):
     pdf.add_files_to_pdf(files=list_of_files,target_document=pdf_file,append=True)
     pdf.save_pdf(output_path=pdf_file)
     pdf.close_all_pdfs()
+
+def archive_receipts():
+    lib = Archive()
+    lib.archive_folder_with_zip("output/receipts", "receipts.zip")
